@@ -3,25 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#define SP_SIZE 16  // number of spaces in the 4x4 puzzle, including the hole
-// This
-#define SP_ASC_SEQUENCE {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-typedef unsigned long long sp_ordinal_t;
-// Space left over in this cacheline. Structure size: 48 bytes
-typedef struct slider_puzzle_position {
-    unsigned long long ordinal;
-    char positions[SP_SIZE];
-} sp_pos_t;
-
-const sp_pos_t start_position = {
-    0ull,
-    SP_ASC_SEQUENCE,
-    // Represents this board:
-    //     0; 1; 2; 3;
-    //     4; 5; 6; 7;
-    //     8; 9;10;11;
-    //    12;13;14;15;
-};
+#include "slider_puzzle.h"
 
 const char pos_masks[SP_SIZE] = {
     0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, // 32 bits
@@ -38,8 +20,6 @@ const char pos_shifts[SP_SIZE]  = {
     46, 48,
     49, // No significant bits for the last number
 };
-
-const char asc_seq[SP_SIZE] = SP_ASC_SEQUENCE;
 
 // expects a valid 'positions' in sp_pos_t, will initialize 'ordinal'
 // returns number of errors
@@ -162,6 +142,19 @@ int legal_moves(sp_pos_t *moves_out, sp_pos_t *position) {
     }
 
     return num_moves;
+}
+
+// Only initializes 'positions', doesn't fill in the ordinal.
+void randomize_sp(sp_pos_t *obj) {
+    char i;
+    obj->positions = SP_ASC_SEQUENCE;
+    for (i = 0; i < (SP_SIZE-1); i++) {
+        char shuffle, tmp;
+        shuffle = rand() % (SP_SIZE - i);
+        tmp = obj->positions[i + shuffle];
+        obj->positions[i + shuffle] = obj->positions[i];
+        obj->positions[i] = tmp;
+    }
 }
 
 // would actually like a O(1) insert data structure
