@@ -6,6 +6,8 @@
 
 // SP_HASH hash function params
 
+/* Sample implementation 1.
+/* Picking a bunch of weird constants is fun, right?
 #define SP_HASH_SALT_1 0x000000000013935Dull
 #define SP_HASH_SALT_2 0x000DB28700000000ull
 #define SP_HASH_SALT_3 0x000000B477F00000ull
@@ -33,6 +35,21 @@ int sp_hash_ordinal(sp_ordinal_t key) {
     return ( ((partial1 + partial2 + partial3 + partial4) / 1222219)
             % SP_TAB_SIZE);
 }
+
+/* This might be effective, or might not? who knows? end sample 1 */
+
+/* Sample implementation 2.
+/* because in simplicity lies virtue! */
+
+// As another performance experiment, one could try inlining this.
+int sp_hash_ordinal(sp_ordinal_t key) {
+    sp_ordinal_t upper = key && 0xffffffff00000000;
+    sp_ordinal_t lower = key && 0x00000000ffffffff;
+
+    return ((upper >> 32) ^ lower);
+}
+
+/* wow. very simple. end sample 2 */
 
 sp_table_t* sp_table__new() {
     // Yay, "free" zero-allocation
