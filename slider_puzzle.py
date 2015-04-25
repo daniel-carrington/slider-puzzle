@@ -17,6 +17,7 @@ finish_pos = (0,  1,  2,  3,
               8,  9, 10, 11,
              12, 13, 14, 15,)
 
+#                       up, down, left, right
 legal_move_displacements = (-4, 4, -1, 1)
 
 def legal_moves(position):
@@ -31,7 +32,76 @@ def legal_moves(position):
     for idx, pos in enumerate(new_pos):
         tmp = list(position)
         tmp[pos], tmp[hole] = tmp[hole], tmp[pos]
-        yield tuple(tmp)
+        yield (position, tuple(tmp))
+
+def legal_moves2(position):
+    '''Iterator which returns more legal moves than legal_moves'''
+    hole = position.index(0)
+
+    for init_dir, first_2dir, second_2dir in \
+                       ((try_move_up, try_move_left, try_move_right),
+                        (try_move_right, try_move_up, try_move_down),
+                        (try_move_down, try_move_right, try_move_left),
+                        (try_move_left, try_move_up, try_move_down)):
+        init_moves = list(move_until_fail(init_dir, position, hole))
+        last_mainpos = position
+        for newpos, newhole in init_moves:
+            yield (last_mainpos, newpos)
+            last_mainpos = newpos
+            last_1_2dir_pos = last_mainpos
+            last_2_2dir_pos = last_mainpos
+            for nextpos, ignore in move_until_fail(first_2dir, newpos, newhole):
+                yield (last_1_2dir_pos, nextpos)
+                last_1_2dir_pos = nextpos
+            for nextpos, ignore in move_until_fail(second_2dir, newpos, newhole):
+                yield (last_2_2dir_pos, nextpos)
+                last_2_2dir_pos = nextpos
+
+def move_until_fail(move_fnc, position, hole_idx):
+    while True:
+        tmp = move_fnc(position, hole_idx)
+        if tmp == None:
+            raise StopIteration
+        else:
+            yield tmp
+        (position, hole_idx) = tmp
+
+def try_move_up(position, hole_idx):
+    '''tries to move up or returns None; translates by -4'''
+    if hole_idx <= 3:
+        return None
+    else:
+        tmp = list(position)
+        tmp[hole_idx - 4], tmp[hole_idx] = tmp[hole_idx], tmp[hole_idx - 4]
+        return [tuple(tmp), hole_idx - 4]
+
+def try_move_down(position, hole_idx):
+    '''tries to move down or returns None; translates by +4'''
+    if hole_idx >= 12:
+        return None
+    else:
+        tmp = list(position)
+        tmp[hole_idx + 4], tmp[hole_idx] = tmp[hole_idx], tmp[hole_idx + 4]
+        return [tuple(tmp), hole_idx + 4]
+
+def try_move_right(position, hole_idx):
+    '''tries to move right or returns None; translates by +1'''
+    if hole_idx % 4 == 3:
+        return None
+    else:
+        tmp = list(position)
+        tmp[hole_idx + 1], tmp[hole_idx] = tmp[hole_idx], tmp[hole_idx + 1]
+        return [tuple(tmp), hole_idx + 1]
+
+def try_move_left(position, hole_idx):
+    '''tries to move up or returns None; translates by -1'''
+    if hole_idx % 4 == 0:
+        return None
+    else:
+        tmp = list(position)
+        tmp[hole_idx - 1], tmp[hole_idx] = tmp[hole_idx], tmp[hole_idx - 1]
+        return [tuple(tmp), hole_idx - 1]
+
 
 int_pos_shifts = list((4*x         for x in range(8))) +\
                  list((4*8+3*x     for x in range(4))) +\
@@ -141,23 +211,22 @@ class SearchCursor(object):
         paths_back = dict()
         # O(mindepth * len(avg moves(node)) ** n)
         for i in range(mindepth):
+            # let's do one 'step' into the game by calling .moves() once on all
+            # of the positions we're currently considering
             log.debug('search depth %d of %d', i, mindepth)
             current_gen = next_gen
-            next_gen = [] # sets have O(1) insert vs. O(n) append?
-            for next_node in map(self.it_pos,
-                        it.chain.from_iterable(map(self.moves, current_gen))):
-                hs_next = self.hs_pos(next_node)
+            next_gen = []
+            for prev_node_pos, next_node_pos in \
+                        it.chain.from_iterable(map(self.moves, current_gen)):
+                        # i.e. for each in current_gen, use moves to get an iterable,
+                        # and chain all those iterables together to see all of the moves
+                        # that can be seen from the element in current_gen
+                hs_next = self.hs_pos(next_node_pos)
+                hs_prev = self.hs_pos(prev_node_pos)
                 if hs_next not in nodes_seen:
-                    # Ok, update the graph we've seen:
                     nodes_seen.add(hs_next)
-                    for vis_node in self.moves(next_node):
-                        # Note that since we are doing breadth-first, using this
-                        # paths_back hash is a shortest path (for this search)
-                        hs_visible = self.hs_pos(vis_node)
-                        if hs_visible not in nodes_seen:
-                            paths_back[hs_visible] = hs_next
-                            next_gen.append(self.it_pos(vis_node))
-                    pass
+                    paths_back[hs_next] = hs_prev
+                    next_gen.append(self.it_pos(next_node_pos))
                 pass # for next_node
             pass # for i
         # figure out which one(s) are the best, O(n * (y + log n))
@@ -191,7 +260,7 @@ class NestedLoopStats:
     def spin(self):
         self.spin_count += 1
 
-def estimate(explosion):
+def estimate(explosion): # FIXME: probably broken by legal_moves interface change
     start = (0, 1, 2, 3,
              4, 5, 6, 7,
              8, 9,10,11,
@@ -232,7 +301,11 @@ def estimate(explosion):
             last_found_spin = spin_counts
     return exact_count
 
-
+def pp_tuple(tup):
+    if len(tup) != 16:
+        raise ValueError("tup must have len == 16")
+    for i in range(4):
+        print "[ %2d %2d %2d %2d ]" % tuple(tup[i*4:i*4+4])
 
 def main(depth, candidates):
     search = SearchCursor((3, 4, 5, 6,
