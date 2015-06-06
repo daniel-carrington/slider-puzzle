@@ -260,45 +260,66 @@ class NestedLoopStats:
     def spin(self):
         self.spin_count += 1
 
-def estimate(explosion): # FIXME: probably broken by legal_moves interface change
+def estimate(explosion, moves=legal_moves, runtime__s=15):
+    import signal as s
+    import datetime as dt
+    global time_left
+    time_left = True
+    def time_is_expired(signum, frame):
+        print "Timer expired."
+        global time_left
+        time_left = False
+    st = dt.datetime.now() # START
+    s.signal(s.SIGALRM, time_is_expired)
+    s.alarm(runtime__s)  # runtime in seconds before alarm
     start = (0, 1, 2, 3,
              4, 5, 6, 7,
              8, 9,10,11,
             12,13,14,15)
 
-    unused = cl.deque([start])
+    unused = cl.deque([[start]])
     seen = set()
-    stats = NestedLoopStats()
-    while True:
-        stats.spin()
-        node = unused.pop()
-        hs_node = int_position(node)
-        if hs_node not in seen:
-            seen.add(hs_node)
-            new_nodes = legal_moves(node)
-            for i in range(explosion):
-                new_nodes = it.chain.from_iterable(legal_moves(n) for n in new_nodes)
-            added_nodes = set()
-            for n in new_nodes:
-                inode = int_position(n)
-                added_nodes.add(inode)
-                unused.extend((x for x in legal_moves(n) if
-                       int_position(x) not in seen))
-            seen.update(added_nodes)
-            last_exact = exact_count
-            exact_count = len(seen)
-            inexact = exact_count + len(unused)
-            last_inexact = inexact
-            if exact_count > 10:
-                if (spin_counts - last_found_spin) > 50 * exact_count:
-                    print 'fewer nodes now? count = %d' % exact_count
-                    break
-                wow = (float(exact_count) / float(last_exact + 1)) > 1.05
-                le1 = last_exact % 100000
-                ec1 = exact_count % 100000
-                if wow or ((le1 - ec1) > 50000) or ec1 < le1:
-                    print 'finding nodes... found =%14d' % exact_count
-            last_found_spin = spin_counts
+    last_found_spin = 0
+    exact_count = 0
+    last_exact = 0
+    inexact = 0
+    while time_left:
+        next_list = unused.pop()
+        for node in next_list:
+            hs_node = int_position(node)
+            if not time_left:
+                seen.add(int_position(node))
+                continue
+            if hs_node not in seen:
+                seen.add(hs_node)
+                more_nodes = [(node, node)]
+                added_nodes = set()
+                for i in range(explosion):
+                    new_nodes = ()
+                    for o, n in more_nodes:
+                        new_nodes = it.chain(new_nodes, moves(n))
+                        added_nodes.add(n)
+                    more_nodes = new_nodes
+                    pass # end range(explosion)
+                unused.append(list(added_nodes))
+                unused.append([n for o, n in more_nodes])
+                seen.update(added_nodes)
+                inexact += 1
+        last_exact = exact_count
+        exact_count = len(seen)
+        tmp = len(unused)
+        tmp_inexact = exact_count + tmp * len(unused[(tmp+1)/2])
+        inexact = max(tmp_inexact, inexact - tmp)
+        #print 'cleared a next_list found=%14d' % exact_count
+    mt = dt.datetime.now()  # MIDDLE
+    print "seen thus far: %d" % len(seen)
+    for rest in unused:
+        for node in rest:
+            seen.add(int_position(node))
+    exact_count = len(seen)
+    et = dt.datetime.now()  # END
+    print "time elapsed: start->mid=%d mid->end=%d start->end=%d" % (
+        (mt - st).seconds, (et - mt).seconds, (et - st).seconds)
     return exact_count
 
 def pp_tuple(tup):
