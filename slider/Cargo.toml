@@ -1,0 +1,6 @@
+[package]
+name = "slider"
+version = "0.1.0"
+authors = ["Daniel Carrington <dpcarrington@gmail.com>"]
+
+[dependencies]
