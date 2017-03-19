@@ -62,19 +62,20 @@ fn board_conversions_0() {
 #[test]
 fn board_conversions_1() {
     let end_ba : [i8; 16] = [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
-    let end_bh : u64 = 0x0003_b977_89ab_cdefu64;
-        //          3    b    9    7    7    8    9    a    b    c    d    e    f
-        // 0b00000011_1011_100101_110_111_1000_1001_1010_1011_1100_1101_1110_1111
+    let end_bh : u64 = 0x0001_b977_89ab_cdefu64;
+        //          1     b     9     7     7    8    9    a    b    c    d    e    f
+        // 0b000 0001 10_11 100_1 01_11 0_111 1000 1001 1010 1011 1100 1101 1110 1111
+        //          1  2  3   4    5    6   7    8    9    a    b    c    d    e    f
     {
-        assert_eq!(format!("0x{:012x}", Board::array_to_hash(&Board::hash_to_array(&end_bh))),
-            format!("0x{:012x}", &end_bh));
-
         let rt_bd = Board::hash_to_array(&Board::array_to_hash(&end_ba));
         assert_eq!(rt_bd, end_ba);
+
+        assert_eq!(format!("0x{:013x}", Board::array_to_hash(&Board::hash_to_array(&end_bh))),
+            format!("0x{:013x}", &end_bh));
     }
     {
         let eh = Board::array_to_hash(&end_ba);
-        assert_eq!(format!("0x{:012x}", eh), format!("0x{:012x}", end_bh));
+        assert_eq!(format!("0x{:013x}", eh), format!("0x{:013x}", end_bh));
     }
     //assert_eq!();
 }
@@ -87,18 +88,19 @@ fn get_nth_unused_val(n : i8, val_used : u32) -> i8 {
     let lo = (val_used + 1).trailing_zeros() as i8;
     let skipped_val_used = !((1u32 << lo) - 1u32) & val_used;
     let rv = _get_nth_unused_val(n, skipped_val_used, lo);
-    println!("get_nth_unused_val rv = {}", rv);
+    // println!("get_nth_unused_val rv = {}", rv);
     rv
 }
 
 fn _get_nth_unused_val(n : i8, val_used : u32, previous : i8) -> i8 {
-    println!("get_nth_unused_val(n={}, val_used=0x{:04x}, previous={})", n, val_used, previous);
+    // println!("get_nth_unused_val(n={}, val_used=0x{:04x}, previous={})", n, val_used, previous);
     let tz : i8 = (val_used.trailing_zeros() as i8) - previous;
     if tz >= n {
         n + previous
     }
     else {
-        let next_val_used = (!(1u32 << tz)) & val_used;
+        println!("n={} val_used=0x{:04x} tz={} previous={}", n, val_used, tz, previous);
+        let next_val_used = (!(1u32 << tz as u32)) & val_used;
         _get_nth_unused_val(n, next_val_used, previous + 1)
     }
 }
@@ -113,7 +115,7 @@ impl Board {
         let mut val_used : u32 = 0;
         for i in 0 .. 16 {
             let hf : i8 =  INT_POS_WIDTHS.get(i).unwrap() &
-                   ((&bh >> INT_POS_SHIFTS.get(i).unwrap()) as i8);
+                  ((&bh >> INT_POS_SHIFTS.get(i).unwrap()) as i8);
             let code : i8 = get_nth_unused_val(hf, val_used);
 
             println!("h2a: i = {:2}, hf = {:2}, code = {:2}, val_used = 0x{:04x}",
@@ -121,7 +123,7 @@ impl Board {
 
             debug_assert!((code >= 0) && (code <= 15));
             debug_assert!(((val_used & (1 << code)) == 0), "h2a value seen before;\n\
-                    \tbh=0x{:012x} code={}, i={}, hf={}, val_used=0x{:04x}\n\
+                    \tbh=0x{:013x} code={}, i={}, hf={}, val_used=0x{:04x}\n\
                     \trv={:?}",
                 bh, code, i, hf, val_used,
                 rv);
@@ -132,14 +134,15 @@ impl Board {
     }
 
     fn array_to_hash(&ba : &BoardArray) -> BoardHash {
-        let mut rv : BoardHash = 0u64;
+        let mut rv : BoardHash = 0;
         let mut val_used : u32 = 0;
         for i in 0 .. 16 {
             debug_assert!(((ba[i] >= 0) && (ba[i] <= 15)),
                 "i = {}, ba[i] = {}, should be in range 0..16", i, ba[i]);
             debug_assert!(((val_used & (1 << ba[i])) == 0),
                 "value seen before: i={}, val_used=0x{:04x}, ba={:?}", i, val_used, ba);
-            let code : i8 = (i as i8) - num_previous_vals_used(i as u32, val_used);
+            let code : i8 = (ba[i] as i8) - num_previous_vals_used(get_nth_unused_val(0, val_used) as u32, val_used);
+            println!("rv = 0x{:013x}, ba[i] = {:2}, code = {:2}, val_used = 0x{:04x}", rv, ba[i], code, val_used);
             rv |= (code as u64).wrapping_shl(*INT_POS_SHIFTS.get(i).unwrap() as u32);
             val_used |= 1 << ba[i];
         }
